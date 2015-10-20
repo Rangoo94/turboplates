@@ -154,10 +154,54 @@ function Turboplates(str, templateName, elements) {
     this.rootNode = Node.build(str);
 }
 
-Turboplates.prototype.toFunction = function() {
-    var str = '';
+function _js(obj) {
+    return JSON.stringify(obj);
+}
 
-    return (new Function('return function ' + this.templateName + '(vars) {' + str + '}'))();
+function parseNode(node) {
+    var html = 'function(_refs) {\n',
+        _this = this;
+
+    if (node.tag === null) {
+        html += 'return document.createTextNode(' + _js(node.textContent) + ');\n';
+    } else {
+        html += 'var el = document.createElement(' + _js(node.tag) + ');\n';
+
+        Object.keys(node.attributes).forEach(function(attr) {
+            html += 'el.setAttribute(' + _js(attr) + ', ' + _js(node.attributes[attr]) + ');\n';
+        });
+
+        node.children.forEach(function(child) {
+            html += 'el.appendChild(' + parseNode.call(_this, child) + ');';
+        });
+
+        html += 'return el;\n';
+    }
+
+    return html + '}(_refs)';
+}
+
+Turboplates.prototype.toFunction = function() {
+    var _this = this,
+        str;
+
+    str = 'var _refs = {};\nthis.els = [];\n';
+
+    for (var i = 0; i < this.rootNode.children.length; i++) {
+        str += 'this.els.push(' + parseNode.call(this, this.rootNode.children[i]) + ');\n';
+    }
+
+    str += 'this.appendTo = function(node) {\n' +
+           'for (var i = 0; i < this.els.length; i++) {\n' +
+           'node.appendChild(this.els[i]);\n' +
+           '}\n' +
+           '};\n';
+
+    return (new Function(
+        'return function ' + this.templateName + '(vars) {\n' +
+        str +
+        '}'
+    ))();
 };
 
 module.exports = Turboplates;
