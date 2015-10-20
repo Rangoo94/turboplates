@@ -7,7 +7,27 @@ var ExpressionElement = require('./turboplates/elements/expression');
 
 var utils = require('./utils');
 
-var BLOCK_REGEXP = /(\{%[\t\r\n ]+(end)?([^\t\r\n ]+)([\t\r\n ]*[^\t\r\n ]+)?[\t\r\n ]+%})|((((\{\{[\t\r\n ]*([^\t\r\n ]+)[\t\r\n ]*}}))))/;
+var BLOCK_REGEXP = new RegExp(
+    '(' +
+        '\{%' + // Element RegExp
+            '[\t\r\n ]+' +
+                '(end)?([^\t\r\n ]+)' + // Element name
+                '([\t\r\n ]*' +
+                '[^\t\r\n ]+)?' + // Element arguments
+            '[\t\r\n ]+' +
+        '%}' +
+    ')' +
+
+    '|' +
+
+    '((((' +
+        '\{\{' + // Expression RegExp
+            '[\t\r\n ]*' +
+                '([^\t\r\n ]+)' + // Expression
+            '[\t\r\n ]*' +
+        '}}' +
+    '))))'
+);
 
 function prepareReplacements(str) {
     var arr = str.split(BLOCK_REGEXP);
@@ -115,20 +135,6 @@ function prepareReplacements(str) {
 
         delete blocks[id].text;
     });
-
-    console.log(JSON.stringify(Object.keys(blocks).map(function(b) {
-        b = blocks[b];
-        return {
-            id: b.id,
-            name: b.name,
-            argument: b.argument,
-            rootNode: !!b.rootNode
-        };
-    }), null, 2));
-
-    console.log('\n\n');
-
-    console.log(parsedString);
 
     return parsedString;
 }
