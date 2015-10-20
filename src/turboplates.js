@@ -3,10 +3,11 @@ var Node = require('./turboplates/node');
 var BlockElement = require('./turboplates/elements/block');
 var ConditionElement = require('./turboplates/elements/condition');
 var ExtendsElement = require('./turboplates/elements/extends');
+var ExpressionElement = require('./turboplates/elements/expression');
 
 var utils = require('./utils');
 
-var BLOCK_REGEXP = /(\{%[\t\r\n ]+(end)?([^\t\r\n ]+)([\t\r\n ]*[^\t\r\n ]+)?[\t\r\n ]+%})/;
+var BLOCK_REGEXP = /(\{%[\t\r\n ]+(end)?([^\t\r\n ]+)([\t\r\n ]*[^\t\r\n ]+)?[\t\r\n ]+%})|((((\{\{[\t\r\n ]*([^\t\r\n ]+)[\t\r\n ]*}}))))/;
 
 function prepareReplacements(str) {
     var arr = str.split(BLOCK_REGEXP);
@@ -16,11 +17,16 @@ function prepareReplacements(str) {
     parsed.push(arr.shift());
 
     while (arr.length) {
+        if (arr[0] === void 0) {
+            arr.shift();
+            continue;
+        }
+
         parsed.push(arr.shift());
 
         if (BLOCK_REGEXP.test(parsed[parsed.length - 1])) {
             // Remove unneeded matches
-            arr.splice(0, 3);
+            arr.splice(0, 4);
         }
     }
 
@@ -40,13 +46,24 @@ function prepareReplacements(str) {
 
         if (parsed.length) {
             block = parsed.shift().match(BLOCK_REGEXP);
-            block = {
-                id: utils.generateId(),
-                end: !!block[2],
-                name: block[3],
-                argument: typeof block[4] === 'string' ? block[4].trim() : block[4],
-                text: ''
-            };
+
+            if (block[0].substr(0, 2) === '{{') {
+                // Parse expression
+                block = {
+                    end: false,
+                    name: 'expression',
+                    argument: block[9]
+                };
+            } else {
+                block = {
+                    end: !!block[2],
+                    name: block[3],
+                    argument: typeof block[4] === 'string' ? block[4].trim() : block[4],
+                    text: ''
+                };
+            }
+
+            block.id = utils.generateId();
 
             if (this.elements[block.name] && this.elements[block.name].noClosing) {
                 if (openedBlocks.length) {
@@ -56,6 +73,7 @@ function prepareReplacements(str) {
                 }
 
                 currentString = '';
+                blocks[block.id] = block;
             } else if (block.end) {
                 if (openedBlocks[0].name !== block.name) {
                     throw new Error('Closing `' + block.name + '` when `' + openedBlocks[0].name + '` is still opened');
@@ -88,9 +106,29 @@ function prepareReplacements(str) {
     var _this = this;
     Object.keys(blocks).forEach(function(id) {
         _this.replacements[id] = blocks[id];
-        blocks[id].rootNode = Node.build(blocks[id].text);
+
+        if (blocks[id].text !== void 0) {
+            blocks[id].rootNode = Node.build(blocks[id].text);
+        } else {
+            blocks[id].rootNode = new Node(null);
+        }
+
         delete blocks[id].text;
     });
+
+    console.log(JSON.stringify(Object.keys(blocks).map(function(b) {
+        b = blocks[b];
+        return {
+            id: b.id,
+            name: b.name,
+            argument: b.argument,
+            rootNode: !!b.rootNode
+        };
+    }), null, 2));
+
+    console.log('\n\n');
+
+    console.log(parsedString);
 
     return parsedString;
 }
@@ -99,7 +137,8 @@ function Turboplates(str, templateName, elements) {
     this.elements = utils.defaults(elements || {}, {
         'if': ConditionElement,
         'block': BlockElement,
-        'extends': ExtendsElement
+        'extends': ExtendsElement,
+        'expression': ExpressionElement
     });
 
     this.replacements = {};
